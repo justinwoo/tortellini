@@ -66,5 +66,4 @@ main = do
   print . isRight . runExcept $ (to <$> readSection @(Rep Section1) sectionTest1 :: Except UhOhSpaghettios Section1)
   print . isRight . runExcept $ (to <$> readSection @(Rep Section2) sectionTest2 :: Except UhOhSpaghettios Section2)
   print $ parseIniDocument testDoc
-  print (parseIni Config testDoc :: Either UhOhSpaghettios Config)
-  putStrLn "Test suite not yet implemented"
+  print (parseIni testDoc :: Either UhOhSpaghettios Config)

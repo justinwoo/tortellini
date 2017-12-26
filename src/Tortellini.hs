@@ -7,7 +7,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PolyKinds #-}
@@ -30,16 +29,14 @@ import qualified Data.Text as T
 import GHC.Generics
 import GHC.TypeLits
 
-parseIni :: forall record xs topCtor
-   . Generic record
-  => xs ~ GRowToList (Rep record)
-  => ReadDocumentSections xs topCtor record
-  => topCtor
-  -> Text
+parseIni ::
+     Generic record
+  => ReadDocumentSections (Rep record)
+  => Text
   -> Either UhOhSpaghettios record
-parseIni topCtor s = do
+parseIni s = do
   doc <- first (pure . ErrorInParsing . T.pack) $ parseIniDocument s
-  runExcept $ readDocumentSections @xs doc topCtor
+  runExcept $ to <$> readDocumentSections doc
 
 data UhOhSpaghetto
   = Error Text
@@ -71,32 +68,40 @@ instance ReadIniField Bool where
 instance (ReadIniField a) => ReadIniField [a] where
   readIniField s = traverse readIniField $ T.splitOn "," s
 
-class ReadDocumentSections (xs :: [(Symbol, *)]) from to
-  | xs from -> to where
+class ReadDocumentSections (f :: * -> *) where
   readDocumentSections ::
        HashMap Text (HashMap Text Text)
-    -> from
-    -> Except UhOhSpaghettios to
+    -> Except UhOhSpaghettios (f a)
 
-instance ReadDocumentSections '[] from from where
-  readDocumentSections _ = pure
+instance ReadDocumentSections a => ReadDocumentSections (D1 meta a) where
+  readDocumentSections hm = M1 <$> readDocumentSections @a hm
+
+instance ReadDocumentSections a => ReadDocumentSections (C1 meta a) where
+  readDocumentSections hm = M1 <$> readDocumentSections @a hm
+
+instance ReadDocumentSections U1 where
+  readDocumentSections _ = pure U1
+
+instance
+  ( ReadDocumentSections a
+  , ReadDocumentSections b
+  ) => ReadDocumentSections (a :*: b) where
+  readDocumentSections hm = liftA2 (:*:) (readDocumentSections @a hm) (readDocumentSections @b hm)
 
 instance
   ( KnownSymbol name
-  , Generic a
-  , repA ~ Rep a
-  , as ~ GRowToList repA
-  , ReadSection repA
-  , ReadDocumentSections tail from' to
-  ) => ReadDocumentSections ('(name, a) ': tail ) (a -> from') to where
-  readDocumentSections hm f =
+  , Generic t
+  , rep ~ Rep t
+  , ReadSection rep
+  ) => ReadDocumentSections (S1 ('MetaSel ('Just name) z x c) (K1 r t)) where
+  readDocumentSections hm =
     case HM.lookup (T.toLower name) hm of
       Nothing ->
         throwE . pure . ErrorAtDocumentProperty name . Error
         $ "Missing field in document"
       Just x -> do
-        value <- withExcept' $ to <$> readSection @repA x
-        readDocumentSections @tail hm (f value)
+        value <- withExcept' $ to <$> readSection @rep x
+        pure $ M1 (K1 value)
     where
       name = T.pack $ symbolVal @name Proxy
       withExcept' = withExcept . fmap $ ErrorAtDocumentProperty name
@@ -134,16 +139,3 @@ instance
     where
       name = T.pack $ symbolVal @name Proxy
       withExcept' = withExcept . fmap $ ErrorAtSectionProperty name
-
-type family GRowToList (r :: * -> *) :: [(Symbol, *)] where
-  GRowToList (l :*: r)
-    = GRowToList l ++ GRowToList r
-  GRowToList (S1 ('MetaSel ('Just name) _ _ _) (Rec0 a))
-    = '[ '(name, a) ]
-  GRowToList (M1 _ m a)
-    = GRowToList a
-  GRowToList U1 = '[]
-
-type family (a :: [k]) ++ (b :: [k]) :: [k] where
-  '[] ++ bs = bs
-  (a ': as) ++ bs = a ': (as ++ bs)
