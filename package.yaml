@@ -40,3 +40,4 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - tortellini
+    - hspec

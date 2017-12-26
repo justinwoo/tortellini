@@ -9,9 +9,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE NamedFieldPuns #-}
+
+module Main where
 
 import Tortellini
 import Tortellini.Parser
@@ -20,6 +22,7 @@ import Data.HashMap.Strict
 import Data.Text
 import Control.Monad.Trans.Except
 import GHC.Generics
+import Test.Hspec
 
 data Config = Config
   { section1 :: Section1
@@ -54,16 +57,16 @@ testDoc = intercalate "\n"
   , "[section4]"
   ]
 
-sectionTest1 :: HashMap Text Text
-sectionTest1 = fromList [("apple", "banana")]
-
-sectionTest2 :: HashMap Text Text
-sectionTest2 = fromList [("missingapple", "banana")]
-
 main :: IO ()
-main = do
-  putStrLn ""
-  print . isRight . runExcept $ (to <$> readSection @(Rep Section1) sectionTest1 :: Except UhOhSpaghettios Section1)
-  print . isRight . runExcept $ (to <$> readSection @(Rep Section2) sectionTest2 :: Except UhOhSpaghettios Section2)
-  print $ parseIniDocument testDoc
-  print (parseIni testDoc :: Either UhOhSpaghettios Config)
+main = hspec $ do
+  describe "Tortellini.Parser" $ do
+    it "can parse a test document" $ do
+      isRight $ parseIniDocument testDoc
+  describe "Tortellini" $ do
+    it "can parse a test document and has the right values" $ do
+      case parseIni testDoc of
+        Left e -> fail (show e)
+        Right (Config {section1 = Section1 {apple}, section2 = Section2 {watermelon, kiwi}}) -> do
+          apple `shouldBe` "banana"
+          watermelon `shouldBe` True
+          kiwi `shouldBe` 1
