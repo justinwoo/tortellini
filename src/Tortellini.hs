@@ -16,10 +16,10 @@ module Tortellini where
 
 import Tortellini.Parser (parseIniDocument)
 
+import Control.Applicative
 import Control.Monad.Trans.Except
 import qualified Data.Attoparsec.Text as AP
 import Data.Bifunctor
-import Data.Generics.Product
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.List.NonEmpty
@@ -30,18 +30,16 @@ import qualified Data.Text as T
 import GHC.Generics
 import GHC.TypeLits
 
-parseIni :: forall record xs ctors topCtor
+parseIni :: forall record xs topCtor
    . Generic record
-  => Generic ctors
   => xs ~ GRowToList (Rep record)
-  => ReadDocumentSections xs ctors topCtor record
-  => ctors
-  -> topCtor
+  => ReadDocumentSections xs topCtor record
+  => topCtor
   -> Text
   -> Either UhOhSpaghettios record
-parseIni ctors topCtor s = do
+parseIni topCtor s = do
   doc <- first (pure . ErrorInParsing . T.pack) $ parseIniDocument s
-  runExcept $ readDocumentSections @xs ctors doc topCtor
+  runExcept $ readDocumentSections @xs doc topCtor
 
 data UhOhSpaghetto
   = Error Text
@@ -73,62 +71,66 @@ instance ReadIniField Bool where
 instance (ReadIniField a) => ReadIniField [a] where
   readIniField s = traverse readIniField $ T.splitOn "," s
 
-class ReadDocumentSections (xs :: [(Symbol, *)]) ctors from to
-  | xs from ctors -> to where
+class ReadDocumentSections (xs :: [(Symbol, *)]) from to
+  | xs from -> to where
   readDocumentSections ::
-       ctors
-    -> HashMap Text (HashMap Text Text)
+       HashMap Text (HashMap Text Text)
     -> from
     -> Except UhOhSpaghettios to
 
-instance ReadDocumentSections '[] ctors from from where
-  readDocumentSections _ _ = pure
+instance ReadDocumentSections '[] from from where
+  readDocumentSections _ = pure
 
 instance
   ( KnownSymbol name
   , Generic a
-  , as ~ GRowToList (Rep a)
-  , Generic ctors
-  , HasField' name ctors ctor
-  , ReadSection as ctor a
-  , ReadDocumentSections tail ctors from' to
-  ) => ReadDocumentSections ('(name, a) ': tail ) ctors (a -> from') to where
-  readDocumentSections ctors hm f =
+  , repA ~ Rep a
+  , as ~ GRowToList repA
+  , ReadSection repA
+  , ReadDocumentSections tail from' to
+  ) => ReadDocumentSections ('(name, a) ': tail ) (a -> from') to where
+  readDocumentSections hm f =
     case HM.lookup (T.toLower name) hm of
       Nothing ->
         throwE . pure . ErrorAtDocumentProperty name . Error
         $ "Missing field in document"
       Just x -> do
-        value <- withExcept' $ readSection @as x ctor
-        readDocumentSections @tail ctors hm (f value)
+        value <- withExcept' $ to <$> readSection @repA x
+        readDocumentSections @tail hm (f value)
     where
       name = T.pack $ symbolVal @name Proxy
       withExcept' = withExcept . fmap $ ErrorAtDocumentProperty name
-      ctor = getField @name ctors
 
-class ReadSection (xs :: [(Symbol, *)]) from to
-  | xs from -> to where
-  readSection ::
-       HashMap Text Text
-    -> from
-    -> Except UhOhSpaghettios to
+class ReadSection (f :: * -> *) where
+  readSection :: HashMap Text Text -> Except UhOhSpaghettios (f a)
 
-instance ReadSection '[] from from where
-  readSection _ = pure
+instance ReadSection a => ReadSection (D1 meta a) where
+  readSection hm = M1 <$> readSection @a hm
+
+instance ReadSection a => ReadSection (C1 meta a) where
+  readSection hm = M1 <$> readSection @a hm
+
+instance ReadSection U1 where
+  readSection _ = pure U1
+
+instance
+  ( ReadSection a
+  , ReadSection b
+  ) => ReadSection (a :*: b) where
+  readSection hm = liftA2 (:*:) (readSection @a hm) (readSection @b hm)
 
 instance
   ( KnownSymbol name
-  , ReadIniField a
-  , ReadSection tail from' to
-  ) => ReadSection ('(name, a) ': tail) (a -> from') to where
-  readSection hm f =
+  , ReadIniField t
+  ) => ReadSection (S1 ('MetaSel ('Just name) z x c) (K1 r t)) where
+  readSection hm =
     case HM.lookup (T.toLower name) hm of
       Nothing ->
         throwE . pure . ErrorAtSectionProperty name . Error
         $ "Missing field in section"
       Just x -> do
         value <- withExcept' $ readIniField x
-        readSection @tail hm (f value)
+        pure $ M1 (K1 value)
     where
       name = T.pack $ symbolVal @name Proxy
       withExcept' = withExcept . fmap $ ErrorAtSectionProperty name

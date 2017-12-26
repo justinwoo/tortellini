@@ -15,7 +15,6 @@
 
 import Tortellini
 import Tortellini.Parser
-import Data.Attoparsec.Text
 import Data.Either
 import Data.HashMap.Strict
 import Data.Text
@@ -28,20 +27,6 @@ data Config = Config
   , section3 :: Section3
   , section4 :: Section4
   } deriving (Show, Eq, Generic)
-
-data ConfigCtors = ConfigCtors
-  { section1 :: Text -> Section1
-  , section2 :: Bool -> Int -> Section2
-  , section3 :: Section3
-  , section4 :: Section4
-  } deriving (Generic)
-
-configCtors :: ConfigCtors
-configCtors = ConfigCtors
-  Section1
-  Section2
-  Section3
-  Section4
 
 data Section1 = Section1
   { apple :: Text
@@ -78,8 +63,8 @@ sectionTest2 = fromList [("missingapple", "banana")]
 main :: IO ()
 main = do
   putStrLn ""
-  print . isRight . runExcept $ readSection @(GRowToList(Rep Section1)) sectionTest1 Section1
-  print . isLeft . runExcept $ readSection @(GRowToList(Rep Section1)) sectionTest2 Section1
+  print . isRight . runExcept $ (to <$> readSection @(Rep Section1) sectionTest1 :: Except UhOhSpaghettios Section1)
+  print . isRight . runExcept $ (to <$> readSection @(Rep Section2) sectionTest2 :: Except UhOhSpaghettios Section2)
   print $ parseIniDocument testDoc
-  print (parseIni configCtors Config testDoc :: Either UhOhSpaghettios Config)
+  print (parseIni Config testDoc :: Either UhOhSpaghettios Config)
   putStrLn "Test suite not yet implemented"
