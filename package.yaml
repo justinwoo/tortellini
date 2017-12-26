@@ -1,23 +1,19 @@
 name:                tortellini
 version:             0.1.0.0
-github:              "githubuser/tortellini"
-license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2017 Author name here"
+github:              "justinwoo/tortellini"
+license:             MIT
+author:              "Justin Woo"
+maintainer:          "moomoowoo@gmail.com"
+copyright:           "2017 Justin Woo"
 
 extra-source-files:
 - README.md
 - ChangeLog.md
 
-# Metadata used when publishing your package
-synopsis:            Short description of your package
+synopsis:            A library for parsing INI files into a record of records of fields
 # category:            Web
 
-# To avoid duplicated efforts in documentation and dealing with the
-# complications of embedding Haddock markup inside cabal files, it is
-# common to point users to the README.md file.
-description:         Please see the README on Github at <https://github.com/githubuser/tortellini#readme>
+description:         Please see the README on Github at <https://github.com/justinwoo/tortellini#readme>
 
 dependencies:
 - base >= 4.7 && < 5

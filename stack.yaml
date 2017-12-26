@@ -2,7 +2,3 @@ resolver: lts-10.0
 
 packages:
 - .
-
-extra-deps:
-- git: git@github.com:kcsongor/generic-lens.git
-  commit: 293657d0444da6c5156512bd1a977c0c590b82f5 # 0.5.1.0

@@ -59,14 +59,14 @@ testDoc = intercalate "\n"
 
 main :: IO ()
 main = hspec $ do
-  describe "Tortellini.Parser" $ do
-    it "can parse a test document" $ do
+  describe "Tortellini.Parser" $
+    it "can parse a test document" $
       isRight $ parseIniDocument testDoc
-  describe "Tortellini" $ do
-    it "can parse a test document and has the right values" $ do
+  describe "Tortellini" $
+    it "can parse a test document and has the right values" $
       case parseIni testDoc of
         Left e -> fail (show e)
-        Right (Config {section1 = Section1 {apple}, section2 = Section2 {watermelon, kiwi}}) -> do
+        Right Config {section1 = Section1 {apple}, section2 = Section2 {watermelon, kiwi}} -> do
           apple `shouldBe` "banana"
           watermelon `shouldBe` True
           kiwi `shouldBe` 1
