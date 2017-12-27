@@ -21,7 +21,6 @@ dependencies:
 - text
 - unordered-containers
 - transformers
-- generic-lens
 
 library:
   source-dirs: src
