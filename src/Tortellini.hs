@@ -79,9 +79,6 @@ instance ReadDocumentSections a => ReadDocumentSections (D1 meta a) where
 instance ReadDocumentSections a => ReadDocumentSections (C1 meta a) where
   readDocumentSections hm = M1 <$> readDocumentSections @a hm
 
-instance ReadDocumentSections U1 where
-  readDocumentSections _ = pure U1
-
 instance
   ( ReadDocumentSections a
   , ReadDocumentSections b
