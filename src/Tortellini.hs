@@ -15,7 +15,6 @@ module Tortellini where
 
 import Tortellini.Parser (parseIniDocument)
 
-import Control.Applicative
 import Control.Monad.Trans.Except
 import qualified Data.Attoparsec.Text as AP
 import Data.Bifunctor
@@ -83,7 +82,7 @@ instance
   ( ReadDocumentSections a
   , ReadDocumentSections b
   ) => ReadDocumentSections (a :*: b) where
-  readDocumentSections hm = liftA2 (:*:) (readDocumentSections @a hm) (readDocumentSections @b hm)
+  readDocumentSections hm = (:*:) <$> readDocumentSections @a hm <*> readDocumentSections @b hm
 
 instance
   ( KnownSymbol name
@@ -119,7 +118,7 @@ instance
   ( ReadSection a
   , ReadSection b
   ) => ReadSection (a :*: b) where
-  readSection hm = liftA2 (:*:) (readSection @a hm) (readSection @b hm)
+  readSection hm = (:*:) <$> readSection @a hm <*> readSection @b hm
 
 instance
   ( KnownSymbol name
