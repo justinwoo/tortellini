@@ -10,6 +10,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 module Tortellini where
 
@@ -18,6 +21,7 @@ import Tortellini.Parser (parseIniDocument)
 import Control.Monad.Trans.Except
 import qualified Data.Attoparsec.Text as AP
 import Data.Bifunctor
+import Data.Functor.Const
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 import Data.List.NonEmpty
@@ -25,17 +29,22 @@ import Data.Proxy (Proxy(Proxy))
 import Data.Semigroup
 import Data.Text (Text)
 import qualified Data.Text as T
+import GHC.Exts
 import GHC.Generics
 import GHC.TypeLits
 
-parseIni ::
-     Generic record
-  => ReadDocumentSections (Rep record)
-  => Text
-  -> Either UhOhSpaghettios record
-parseIni s = do
-  doc <- first (pure . ErrorInParsing . T.pack) $ parseIniDocument s
-  runExcept $ to <$> readDocumentSections doc
+  -- wut:
+-- parseIni :: forall c k r record
+--    . Generic record
+--   => c ~ (GenericInnerOp ReadIniField Text)
+--   => k ~ (HashMap Text Text)
+--   => r ~ (Rep record)
+--   => GenericInnerOp c k r
+--   => Text
+--   -> Either UhOhSpaghettios record
+-- parseIni s = do
+--   doc <- first (pure . ErrorInParsing . T.pack) $ parseIniDocument s
+--   runExcept $ to <$> genericInnerOp (genericInnerOp) doc
 
 data UhOhSpaghetto
   = Error Text
@@ -46,91 +55,77 @@ data UhOhSpaghetto
 
 type UhOhSpaghettios = NonEmpty UhOhSpaghetto
 
-class ReadIniField a where
-  readIniField :: Text -> Except UhOhSpaghettios a
+class ReadIniField (f :: * -> *) where
+  readIniField :: Text -> Except UhOhSpaghettios (f a)
 
-instance ReadIniField Text where
-  readIniField = pure
+instance ReadIniField (Const Text) where
+  readIniField = pure . Const
 
-instance ReadIniField Int where
+instance ReadIniField (Const Int) where
   readIniField s = case AP.parseOnly AP.decimal s of
     Left e -> throwE (pure . Error . T.pack $ e)
-    Right x -> pure x
+    Right x -> pure $ Const x
 
-instance ReadIniField Bool where
+instance ReadIniField (Const Bool) where
   readIniField s
-    | T.toLower s == T.pack "true" = pure True
-    | T.toLower s == T.pack "false" = pure False
+    | T.toLower s == T.pack "true" = pure $ Const True
+    | T.toLower s == T.pack "false" = pure $ Const False
     | otherwise = throwE . pure . Error $
       "expected true/false, got " <> s
 
-instance (ReadIniField a) => ReadIniField [a] where
-  readIniField s = traverse readIniField $ T.splitOn "," s
+-- instance (ReadIniField (Const a)) => ReadIniField (Const [a]) where
+--   readIniField s = traverse readIniField (T.splitOn "," s)
 
-class ReadDocumentSections (f :: * -> *) where
-  readDocumentSections ::
-       HashMap Text (HashMap Text Text)
+class GenericInnerOp (c :: (* -> *) -> Constraint) k (f :: * -> *) where
+  genericInnerOp ::
+       (forall k' f' a'. c f' => k' -> Except UhOhSpaghettios (f' a'))
+    -> HashMap Text k
     -> Except UhOhSpaghettios (f a)
 
-instance ReadDocumentSections a => ReadDocumentSections (D1 meta a) where
-  readDocumentSections hm = M1 <$> readDocumentSections @a hm
+instance GenericInnerOp c k a => GenericInnerOp c k (D1 meta a) where
+  genericInnerOp f hm = M1 <$> genericInnerOp @c @k @a f hm
 
-instance ReadDocumentSections a => ReadDocumentSections (C1 meta a) where
-  readDocumentSections hm = M1 <$> readDocumentSections @a hm
+instance GenericInnerOp c k a => GenericInnerOp c k (C1 meta a) where
+  genericInnerOp f hm = M1 <$> genericInnerOp @c @k @a f hm
 
-instance
-  ( ReadDocumentSections a
-  , ReadDocumentSections b
-  ) => ReadDocumentSections (a :*: b) where
-  readDocumentSections hm = (:*:) <$> readDocumentSections @a hm <*> readDocumentSections @b hm
+instance GenericInnerOp c k U1 where
+  genericInnerOp _ _ = pure U1
 
 instance
-  ( KnownSymbol name
-  , Generic t
-  , rep ~ Rep t
-  , ReadSection rep
-  ) => ReadDocumentSections (S1 ('MetaSel ('Just name) z x c) (K1 r t)) where
-  readDocumentSections hm =
-    case HM.lookup (T.toLower name) hm of
-      Nothing ->
-        throwE . pure . ErrorAtDocumentProperty name . Error
-        $ "Missing field in document"
-      Just x -> do
-        value <- withExcept' $ to <$> readSection @rep x
-        pure $ M1 (K1 value)
-    where
-      name = T.pack $ symbolVal @name Proxy
-      withExcept' = withExcept . fmap $ ErrorAtDocumentProperty name
-
-class ReadSection (f :: * -> *) where
-  readSection :: HashMap Text Text -> Except UhOhSpaghettios (f a)
-
-instance ReadSection a => ReadSection (D1 meta a) where
-  readSection hm = M1 <$> readSection @a hm
-
-instance ReadSection a => ReadSection (C1 meta a) where
-  readSection hm = M1 <$> readSection @a hm
-
-instance ReadSection U1 where
-  readSection _ = pure U1
-
-instance
-  ( ReadSection a
-  , ReadSection b
-  ) => ReadSection (a :*: b) where
-  readSection hm = (:*:) <$> readSection @a hm <*> readSection @b hm
+  ( GenericInnerOp c k a
+  , GenericInnerOp c k b
+  ) => GenericInnerOp c k (a :*: b) where
+  genericInnerOp f hm = (:*:) <$> genericInnerOp @c @k @a f hm <*> genericInnerOp @c @k @b f hm
 
 instance
   ( KnownSymbol name
-  , ReadIniField t
-  ) => ReadSection (S1 ('MetaSel ('Just name) z x c) (K1 r t)) where
-  readSection hm =
+  , ReadIniField (Const t)
+  ) => GenericInnerOp ReadIniField Text (S1 ('MetaSel ('Just name) z x v) (K1 r t)) where
+  genericInnerOp f hm =
     case HM.lookup (T.toLower name) hm of
       Nothing ->
         throwE . pure . ErrorAtSectionProperty name . Error
         $ "Missing field in section"
       Just x -> do
-        value <- withExcept' $ readIniField x
+        value <- withExcept' $ getConst <$> readIniField x
+        pure $ M1 (K1 value)
+    where
+      name = T.pack $ symbolVal @name Proxy
+      withExcept' = withExcept . fmap $ ErrorAtSectionProperty name
+
+instance
+  ( KnownSymbol name
+  , Generic t
+  , rep ~ Rep t
+  , GenericInnerOp ReadIniField Text rep
+  ) => GenericInnerOp (GenericInnerOp ReadIniField Text) (HashMap Text Text) (S1 ('MetaSel ('Just name) z x v) (K1 r t)) where
+  genericInnerOp f hm =
+    case HM.lookup (T.toLower name) hm of
+      Nothing ->
+        throwE . pure . ErrorAtSectionProperty name . Error
+        $ "Missing field in section"
+      Just x -> do
+        value <- withExcept' $ to <$> f x
         pure $ M1 (K1 value)
     where
       name = T.pack $ symbolVal @name Proxy
