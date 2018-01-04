@@ -1,0 +1,61 @@
+-- This file has been generated from package.yaml by hpack version 0.20.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 866a44cfa202497f2fa16b603a16fab672a07b34ddc98918bd7e76e46c349b54
+
+name:           tortellini
+version:        0.1.0.0
+synopsis:       A library for parsing INI files into a record of records of fields
+description:    Please see the README on Github at <https://github.com/justinwoo/tortellini#readme>
+homepage:       https://github.com/justinwoo/tortellini#readme
+bug-reports:    https://github.com/justinwoo/tortellini/issues
+author:         Justin Woo
+maintainer:     moomoowoo@gmail.com
+copyright:      2017 Justin Woo
+license:        MIT
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+extra-source-files:
+    ChangeLog.md
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/justinwoo/tortellini
+
+library
+  hs-source-dirs:
+      src
+  build-depends:
+      attoparsec
+    , base >=4.7 && <5
+    , text
+    , transformers
+    , unordered-containers
+  exposed-modules:
+      Tortellini
+      Tortellini.Parser
+  other-modules:
+      Paths_tortellini
+  default-language: Haskell2010
+
+test-suite tortellini-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      attoparsec
+    , base >=4.7 && <5
+    , hspec
+    , text
+    , tortellini
+    , transformers
+    , unordered-containers
+  other-modules:
+      Paths_tortellini
+  default-language: Haskell2010
